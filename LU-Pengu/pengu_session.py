@@ -2,7 +2,8 @@ import subprocess
 import time
 from pathlib import Path
 
-PENGU_DIR = Path(r"D:\Florent\Desktop\Pengu\Pengu Loader")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+PENGU_DIR = ROOT_DIR / "Pengu Loader"
 PENGU_EXE = PENGU_DIR / "Pengu Loader.exe"
 
 
