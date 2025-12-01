@@ -137,7 +137,7 @@ export function Welcome() {
                           class="opacity-90 hover:opacity-100"
                         >
                           <img
-                            src="https://img.shields.io/github/stars/PenguLoader/PenguLoader?style=flat-square&logo=github"
+                            src="https://img.shields.io/github/stars/Alban1911/Rose?style=flat-round&color=32A832&logo=github"
                             alt=""
                           />
                         </a>
