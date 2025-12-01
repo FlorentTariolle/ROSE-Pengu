@@ -109,29 +109,29 @@ export function Welcome() {
                       <div class="text-sm text-black">{_t("welcome_msg")}</div>
                       <div class="flex mt-5 space-x-1">
                         <a
-                          href="https://chat.pengu.lol/"
+                          href="https://discord.com/invite/cDepnwVS8Z"
                           target="_blank"
                           rel="noreferrer"
                           class="opacity-90 hover:opacity-100"
                         >
                           <img
-                            src="https://img.shields.io/discord/1069483280438673418?style=flat-square&logo=discord&logoColor=white&label=discord&color=5c5fff"
+                            src="https://img.shields.io/discord/1426680928759189545?color=32A832&logo=discord&logoColor=white&label=Discord"
                             alt=""
                           />
                         </a>
                         <a
-                          href="https://pengu.lol/"
+                          href="https://ko-fi.com/roseapp"
                           target="_blank"
                           rel="noreferrer"
                           class="opacity-90 hover:opacity-100"
                         >
                           <img
-                            src="https://img.shields.io/badge/-pengu.lol-607080.svg?&style=flat-square&logo=gitbook&logoColor=white"
+                            src="https://img.shields.io/badge/KoFi-Donate-C03030?logo=ko-fi&logoColor=white"
                             alt=""
                           />
                         </a>
                         <a
-                          href="https://github.com/PenguLoader/PenguLoader/"
+                          href="https://github.com/Alban1911/Rose/"
                           target="_blank"
                           rel="noreferrer"
                           class="opacity-90 hover:opacity-100"
