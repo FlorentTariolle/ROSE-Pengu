@@ -103,7 +103,7 @@ export function Welcome() {
                   </div>
                   <div class="ml-4 mt-0 text-left">
                     <h3 class="text-base mt-0 font-semibold leading-6 text-gray-900">
-                      Pengu Loader
+                      Rose
                     </h3>
                     <div class="mt-2">
                       <div class="text-sm text-black">{_t("welcome_msg")}</div>
