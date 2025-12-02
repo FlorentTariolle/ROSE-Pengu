@@ -452,6 +452,3 @@ Temporary Items
 packages/
 include/
 *.g.h
-
-.vscode/*
-.build/*
