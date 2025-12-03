@@ -27,7 +27,7 @@ div[id^=index_loading_div]::before {
 
 div[id^=index_loading_div]:after {
   margin-top: 32px;
-  content: "Pengu-Powered";
+  content: "Rose";
   color: #e2e1e1;
   font-family: 'Inter', sans-serif;
   font-size: 1rem;
