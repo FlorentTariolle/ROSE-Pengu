@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -19,7 +19,7 @@ namespace PenguLoader
         public static string GithubUrl => $"https://github.com/{GithubRepo}";
         public static string GithubIssuesUrl => $"https://github.com/{GithubRepo}/issues";
 
-        public const string VERSION = "1.1.6";
+        public const string VERSION = "2.0.0";
 
         private const int ATTACH_PARENT_PROCESS = -1;
         private static bool _consoleAttached;
