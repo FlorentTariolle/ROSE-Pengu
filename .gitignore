@@ -1,2 +1,13 @@
 .vscode/
+.vs/
 build/
+*.md
+*.log
+*.exp
+*.obj
+*.pdb
+*.suo
+*.user
+logs/*
+PenguLoader-1.1.6/bin/plugins/*
+settings.local.json

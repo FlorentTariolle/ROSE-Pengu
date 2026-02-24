@@ -2,6 +2,7 @@
 #include <fstream>
 #include <unordered_map>
 #include "include/cef_version.h"
+#include "logger.h"
 #include <Windows.h>
 
 #if OS_WIN
@@ -17,21 +18,75 @@ path config::loader_dir()
     static std::wstring path;
     if (path.empty())
     {
+        logger::info("Config", "loader_dir() called, computing path...");
+
         // Get this dll path.
         WCHAR thisPath[2048];
         GetModuleFileNameW((HINSTANCE)&__ImageBase, thisPath, ARRAYSIZE(thisPath) - 1);
+        logger::info_w("Config", (std::wstring(L"DLL path: ") + thisPath).c_str());
+
+        // Read loader directory from %LOCALAPPDATA%\Rose\config.ini
+        // This is outside the League directory so it won't be cleaned up by integrity checks.
+        {
+            wchar_t appdata[2048];
+            DWORD len = GetEnvironmentVariableW(L"LOCALAPPDATA", appdata, 2048);
+            if (len > 0)
+            {
+                std::wstring cfg = std::wstring(appdata) + L"\\Rose\\config.ini";
+                logger::info_w("Config", (std::wstring(L"Reading loaderpath from: ") + cfg).c_str());
+
+                wchar_t value[2048];
+                DWORD out = GetPrivateProfileStringW(L"General", L"loaderpath", L"", value, 2048, cfg.c_str());
+                logger::infof("Config", "GetPrivateProfileStringW returned %lu chars", out);
+
+                if (out > 0)
+                {
+                    std::wstring dir(value);
+                    logger::info_w("Config", (std::wstring(L"loaderpath value: ") + dir).c_str());
+
+                    while (!dir.empty() && (dir.back() == L'\\' || dir.back() == L'/'))
+                        dir.pop_back();
+                    if (!dir.empty())
+                    {
+                        path = dir;
+                        logger::info_w("Config", (std::wstring(L"loader_dir resolved to: ") + path).c_str());
+                        return path;
+                    }
+                }
+                else
+                {
+                    logger::warn("Config", "loaderpath is empty or not found in config.ini");
+                }
+            }
+            else
+            {
+                logger::error("Config", "Failed to get LOCALAPPDATA environment variable");
+            }
+        }
+
+        logger::info("Config", "Falling back to DLL directory resolution...");
 
         DWORD attr = GetFileAttributesW(thisPath);
         if ((attr & FILE_ATTRIBUTE_REPARSE_POINT) != FILE_ATTRIBUTE_REPARSE_POINT)
         {
             path = thisPath;
-            return path = path.substr(0, path.find_last_of(L"/\\"));
+            path = path.substr(0, path.find_last_of(L"/\\"));
+            logger::info_w("Config", (std::wstring(L"loader_dir (from DLL path): ") + path).c_str());
+            return path;
         }
 
         OFSTRUCT of{};
         WCHAR finalPath[2048];
         // Get final path.
         HANDLE file = CreateFileW(thisPath, GENERIC_READ, 0x1, NULL, OPEN_EXISTING, 0, NULL);
+        if (file == INVALID_HANDLE_VALUE)
+        {
+            // Failed to open file, fall back to using thisPath directly
+            path = thisPath;
+            path = path.substr(0, path.find_last_of(L"/\\"));
+            logger::info_w("Config", (std::wstring(L"loader_dir (fallback): ") + path).c_str());
+            return path;
+        }
         DWORD pathLength = GetFinalPathNameByHandleW(file, finalPath, 2048, FILE_NAME_OPENED);
         CloseHandle(file);
 
@@ -41,7 +96,9 @@ path config::loader_dir()
             dir.erase(0, 4);
 
         // Get parent folder.
-        return path = dir.substr(0, dir.find_last_of(L"/\\"));
+        path = dir.substr(0, dir.find_last_of(L"/\\"));
+        logger::info_w("Config", (std::wstring(L"loader_dir (final path): ") + path).c_str());
+        return path;
     }
 #elif OS_MAC
     static std::string path;
@@ -223,18 +280,46 @@ static int get_config_value_int(const char *key, int fallback)
     int value = fallback;
 
     if (it != map.end())
-        value = std::stoi(it->second);
+    {
+        try
+        {
+            value = std::stoi(it->second);
+        }
+        catch (const std::exception &)
+        {
+            // Invalid integer format, use fallback
+        }
+    }
 
     return value;
 }
 
 path config::plugins_dir()
 {
+    logger::info("Config", "plugins_dir() called");
+
     std::string cpath = get_config_value(__func__, "");
     if (!cpath.empty())
+    {
+        logger::infof("Config", "plugins_dir from config: %s", cpath.c_str());
         return (const char8_t *)cpath.c_str();
+    }
 
-    return loader_dir() / "plugins";
+    auto dir = loader_dir() / "plugins";
+    logger::info_w("Config", (std::wstring(L"plugins_dir: ") + dir.wstring()).c_str());
+
+    // Check if directory exists
+    DWORD attr = GetFileAttributesW(dir.wstring().c_str());
+    if (attr == INVALID_FILE_ATTRIBUTES)
+    {
+        logger::warn("Config", "plugins_dir does NOT exist!");
+    }
+    else if (attr & FILE_ATTRIBUTE_DIRECTORY)
+    {
+        logger::info("Config", "plugins_dir exists and is a directory");
+    }
+
+    return dir;
 }
 
 std::string config::disabled_plugins()

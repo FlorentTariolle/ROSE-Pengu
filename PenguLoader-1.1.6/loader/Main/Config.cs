@@ -15,45 +15,73 @@ namespace PenguLoader.Main
 
         static Config()
         {
-            Utils.EnsureDirectoryExists(PluginsDir);
-            Utils.EnsureFileExists(ConfigPath);
-            Utils.EnsureFileExists(DataStorePath);
-
-            _data = new Dictionary<string, string>();
-
-            if (File.Exists(ConfigPath))
+            try
             {
-                var lines = File.ReadAllLines(ConfigPath);
+                Logger.Debug("Config", "Static constructor called");
+                Logger.Debug("Config", $"ConfigPath: {ConfigPath}");
+                Logger.Debug("Config", $"DataStorePath: {DataStorePath}");
+                Logger.Debug("Config", $"PluginsDir: {PluginsDir}");
 
-                foreach (string line in lines)
+                Utils.EnsureDirectoryExists(PluginsDir);
+                Utils.EnsureFileExists(ConfigPath);
+                Utils.EnsureFileExists(DataStorePath);
+
+                _data = new Dictionary<string, string>();
+
+                if (File.Exists(ConfigPath))
                 {
-                    var parts = line.Split(new[] { '=' }, 2);
+                    var lines = File.ReadAllLines(ConfigPath);
+                    Logger.Debug("Config", $"Loaded {lines.Length} lines from config");
 
-                    if (parts.Length == 2)
+                    foreach (string line in lines)
                     {
-                        string key = parts[0].Trim();
-                        string value = parts[1].Trim();
+                        var parts = line.Split(new[] { '=' }, 2);
 
-                        _data[key] = value;
+                        if (parts.Length == 2)
+                        {
+                            string key = parts[0].Trim();
+                            string value = parts[1].Trim();
+
+                            _data[key] = value;
+                            Logger.Debug("Config", $"Loaded: {key}={value}");
+                        }
                     }
                 }
+                else
+                {
+                    Logger.Debug("Config", "Config file does not exist");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Config", "Failed to initialize config", ex);
+                _data = new Dictionary<string, string>();
             }
         }
 
         static void Save()
         {
-            var sb = new StringBuilder();
-
-            foreach (var kv in _data)
+            try
             {
-                var key = kv.Key;
-                var value = kv.Value.Trim();
+                Logger.Debug("Config", "Saving config...");
+                var sb = new StringBuilder();
 
-                var line = $"{key}={value}";
-                sb.AppendLine(line);
+                foreach (var kv in _data)
+                {
+                    var key = kv.Key;
+                    var value = kv.Value.Trim();
+
+                    var line = $"{key}={value}";
+                    sb.AppendLine(line);
+                }
+
+                File.WriteAllText(ConfigPath, sb.ToString());
+                Logger.Debug("Config", $"Config saved to {ConfigPath}");
             }
-
-            File.WriteAllText(ConfigPath, sb.ToString());
+            catch (Exception ex)
+            {
+                Logger.Error("Config", "Failed to save config", ex);
+            }
         }
 
         public static string LeaguePath
@@ -63,18 +91,21 @@ namespace PenguLoader.Main
                 // First, try to get from Rose config.ini
                 var rosePath = GetRoseConfigPath();
                 if (!string.IsNullOrWhiteSpace(rosePath))
+                {
+                    Logger.Debug("Config", $"LeaguePath (from Rose config): {rosePath}");
                     return rosePath;
+                }
 
                 // Fallback to local config
-                return Get("LeaguePath");
+                var localPath = Get("LeaguePath");
+                Logger.Debug("Config", $"LeaguePath (from local config): {localPath}");
+                return localPath;
             }
-            set => Set("LeaguePath", value);
-        }
-
-        public static bool UseSymlink
-        {
-            get => GetBool("UseSymlink", false);
-            set => SetBool("UseSymlink", value);
+            set
+            {
+                Logger.Info("Config", $"Setting LeaguePath to: {value}");
+                Set("LeaguePath", value);
+            }
         }
 
         public static string Language
@@ -135,11 +166,16 @@ namespace PenguLoader.Main
         {
             try
             {
-                var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                var localAppData = DesktopUser.GetLocalAppData();
                 var configPath = Path.Combine(localAppData, "Rose", "config.ini");
-                
+
+                Logger.Debug("Config", $"Checking Rose config at: {configPath}");
+
                 if (!File.Exists(configPath))
+                {
+                    Logger.Debug("Config", "Rose config.ini does not exist");
                     return string.Empty;
+                }
 
                 var lines = File.ReadAllLines(configPath);
                 bool inGeneralSection = false;
@@ -147,7 +183,7 @@ namespace PenguLoader.Main
                 foreach (var line in lines)
                 {
                     var trimmed = line.Trim();
-                    
+
                     // Check for section headers
                     if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
                     {
@@ -166,29 +202,43 @@ namespace PenguLoader.Main
 
                             if (key.Equals("clientpath", StringComparison.OrdinalIgnoreCase))
                             {
+                                Logger.Debug("Config", $"Found clientpath in Rose config: {value}");
+
                                 if (string.IsNullOrWhiteSpace(value))
-                                    return string.Empty;
-
-                                // Remove trailing slash
-                                value = value.TrimEnd('\\', '/');
-
-                                // Append \LeagueClient if not already present
-                                var leagueClient = "\\LeagueClient";
-                                if (value.Length < leagueClient.Length || 
-                                    !value.EndsWith(leagueClient, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    value += leagueClient;
+                                    Logger.Debug("Config", "clientpath is empty");
+                                    return string.Empty;
                                 }
 
+                                value = value.TrimEnd('\\', '/');
+
+                                // Use path as-is if it already contains the client executables
+                                if (LCU.IsValidDir(value))
+                                {
+                                    Logger.Debug("Config", $"clientpath is valid: {value}");
+                                    return value;
+                                }
+
+                                // Otherwise try appending \LeagueClient for older directory layouts
+                                var withSubdir = value + "\\LeagueClient";
+                                if (LCU.IsValidDir(withSubdir))
+                                {
+                                    Logger.Debug("Config", $"clientpath valid with subdir: {withSubdir}");
+                                    return withSubdir;
+                                }
+
+                                Logger.Warn("Config", $"clientpath not valid, returning as-is: {value}");
                                 return value;
                             }
                         }
                     }
                 }
+
+                Logger.Debug("Config", "clientpath not found in Rose config");
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore errors reading config file
+                Logger.Error("Config", "Failed to read Rose config", ex);
             }
 
             return string.Empty;

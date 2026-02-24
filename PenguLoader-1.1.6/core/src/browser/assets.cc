@@ -1,4 +1,5 @@
 #include "browser.h"
+#include "logger.h"
 #include <unordered_set>
 #include "include/capi/cef_parser_capi.h"
 #include "include/capi/cef_scheme_capi.h"
@@ -110,6 +111,8 @@ private:
         bool js_mime = false;
 
         CefScopedStr url = request->get_url(request);
+        logger::info_w("Assets", (std::wstring(L"Asset request: ") + std::wstring(url.str, url.length)).c_str());
+
         std::u16string path, query_part;
         path.assign((char16_t *)url.str + 15, url.length - 15); // skip 'https://plugins'
 
@@ -406,9 +409,50 @@ struct AssetsSchemeHandlerFactory : CefRefCount<cef_scheme_handler_factory_t>
 
 void browser::register_plugins_domain(cef_request_context_t *ctx)
 {
+    logger::info("Assets", "register_plugins_domain called");
+
+    auto plugins_path = config::plugins_dir();
+    logger::info_w("Assets", (std::wstring(L"Plugins directory: ") + plugins_path.wstring()).c_str());
+
+    // Check if plugins directory exists and list contents
+    WIN32_FIND_DATAW findData;
+    std::wstring searchPath = plugins_path.wstring() + L"\\*";
+    HANDLE hFind = FindFirstFileW(searchPath.c_str(), &findData);
+
+    if (hFind == INVALID_HANDLE_VALUE)
+    {
+        logger::warn("Assets", "Plugins directory not found or empty!");
+    }
+    else
+    {
+        int fileCount = 0;
+        int dirCount = 0;
+        do
+        {
+            if (wcscmp(findData.cFileName, L".") == 0 || wcscmp(findData.cFileName, L"..") == 0)
+                continue;
+
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            {
+                dirCount++;
+                logger::info_w("Assets", (std::wstring(L"  [DIR] ") + findData.cFileName).c_str());
+            }
+            else
+            {
+                fileCount++;
+                logger::info_w("Assets", (std::wstring(L"  [FILE] ") + findData.cFileName).c_str());
+            }
+        } while (FindNextFileW(hFind, &findData));
+        FindClose(hFind);
+
+        logger::infof("Assets", "Found %d files and %d directories in plugins folder", fileCount, dirCount);
+    }
+
     auto scheme = u"https"_s;
     auto domain = u"plugins"_s;
     auto factory = new AssetsSchemeHandlerFactory();
 
+    logger::info("Assets", "Registering scheme handler for https://plugins/");
     ctx->register_scheme_handler_factory(ctx, &scheme, &domain, factory);
+    logger::info("Assets", "Scheme handler registered");
 }

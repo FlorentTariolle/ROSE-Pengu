@@ -1,5 +1,6 @@
 #include "pengu.h"
 #include "hook.h"
+#include "logger.h"
 #include "include/cef_version.h"
 
 // CefContext::GetBackgroundColor()
@@ -26,27 +27,50 @@ static void fix_browser_background(const void *rladdr)
 
 bool check_libcef_version(bool is_browser)
 {
+    logger::infof("LibCef", "check_libcef_version called, is_browser=%d", is_browser);
+    logger::infof("LibCef", "Looking for module: %s", LIBCEF_MODULE_NAME);
+
     void *libcef = dylib::find_lib(LIBCEF_MODULE_NAME);
 
     if (libcef != nullptr)
     {
+        logger::infof("LibCef", "Found libcef at %p", libcef);
+
         auto get_version = reinterpret_cast<decltype(&cef_version_info)>(dylib::find_proc(libcef, "cef_version_info"));
 
-        // Check CEF version
-        if (get_version == nullptr || get_version(0) != CEF_VERSION_MAJOR)
+        if (get_version == nullptr)
         {
+            logger::error("LibCef", "cef_version_info function not found!");
             if (is_browser)
                 dialog::alert("Pengu does not support your Client version.", "Pengu Loader");
             return false;
         }
 
+        int client_cef_version = get_version(0);
+        logger::infof("LibCef", "Client CEF version: %d, Expected: %d", client_cef_version, CEF_VERSION_MAJOR);
+
+        // Check CEF version
+        if (client_cef_version != CEF_VERSION_MAJOR)
+        {
+            logger::errorf("LibCef", "CEF VERSION MISMATCH! Client=%d, Expected=%d", client_cef_version, CEF_VERSION_MAJOR);
+            if (is_browser)
+                dialog::alert("Pengu does not support your Client version.", "Pengu Loader");
+            return false;
+        }
+
+        logger::info("LibCef", "CEF version check PASSED");
+
         if (is_browser)
+        {
+            logger::info("LibCef", "Applying browser background fix...");
             fix_browser_background((const void *)get_version);
+        }
 
         return true;
     }
     else
     {
+        logger::error("LibCef", "libcef module NOT FOUND!");
         if (is_browser)
             dialog::alert("Failed to load Chromium Embedded Framework.", "Pengu Loader");
         return false;

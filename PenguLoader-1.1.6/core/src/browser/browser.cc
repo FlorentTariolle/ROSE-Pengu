@@ -1,5 +1,6 @@
 #include "browser.h"
 #include "hook.h"
+#include "logger.h"
 #include "include/capi/cef_app_capi.h"
 #include "include/capi/cef_client_capi.h"
 #include "include/capi/cef_browser_capi.h"
@@ -11,6 +12,8 @@ static cef_request_context_t *Hooked_CefRequestContext_CreateContext(
     const struct _cef_request_context_settings_t *settings,
     struct _cef_request_context_handler_t *handler)
 {
+    logger::info("Browser", "Hooked_CefRequestContext_CreateContext called");
+
     const_cast<cef_request_context_settings_t *>(settings)->cache_path
         = CefStr::from_path(config::cache_dir()).forward();
 
@@ -18,10 +21,17 @@ static cef_request_context_t *Hooked_CefRequestContext_CreateContext(
     //const_cast<cef_request_context_settings_t *>(settings)->persist_user_preferences = 1;
     //const_cast<cef_request_context_settings_t *>(settings)->ignore_certificate_errors = 1;
 
+    logger::info("Browser", "Creating request context...");
     auto ctx = CefRequestContext_CreateContext(settings, handler);
+    logger::infof("Browser", "Request context created: %p", ctx);
 
+    logger::info("Browser", "Registering plugins domain...");
     browser::register_plugins_domain(ctx);
+    logger::info("Browser", "Plugins domain registered");
+
+    logger::info("Browser", "Registering riotclient domain...");
     browser::register_riotclient_domain(ctx);
+    logger::info("Browser", "Riotclient domain registered");
 
     return ctx;
 }
@@ -110,9 +120,18 @@ static int Hooked_CefBrowserHost_CreateBrowser(
 {
     auto &url_ = CefStr::borrow(url);
 
+    logger::info("Browser", "Hooked_CefBrowserHost_CreateBrowser called");
+    // Log URL (be careful with wide strings)
+    if (url && url->str)
+    {
+        logger::info_w("Browser", (std::wstring(L"Browser URL: ") + std::wstring(url->str, url->length)).c_str());
+    }
+
     // Hook main browser only.
     if (url_.startw("https://riot:") && url_.endw("/bootstrap.html"))
     {
+        logger::info("Browser", "Main browser detected (bootstrap.html), hooking client...");
+
         // Create extra info if null.
         if (extra_info == nullptr)
             extra_info = cef_dictionary_value_create();
@@ -122,9 +141,12 @@ static int Hooked_CefBrowserHost_CreateBrowser(
 
         // Hook client.
         HookMainBrowserClient(client);
+        logger::info("Browser", "Main browser client hooked");
     }
 
-    return CefBrowserHost_CreateBrowser(windowInfo, client, url, settings, extra_info, request_context);
+    int result = CefBrowserHost_CreateBrowser(windowInfo, client, url, settings, extra_info, request_context);
+    logger::infof("Browser", "CefBrowserHost_CreateBrowser returned %d", result);
+    return result;
 }
 
 static decltype(cef_app_t::on_before_command_line_processing) OnBeforeCommandLineProcessing;
@@ -205,15 +227,21 @@ static hook::Hook<decltype(&cef_initialize)> CefInitialize;
 static int Hooked_CefInitialize(const struct _cef_main_args_t* args,
     const struct _cef_settings_t* settings, cef_app_t* app, void* windows_sandbox_info)
 {
+    logger::info("Browser", "Hooked_CefInitialize called");
+
     // Hook command line.
+    logger::info("Browser", "Hooking OnBeforeCommandLineProcessing...");
     OnBeforeCommandLineProcessing = app->on_before_command_line_processing;
     app->on_before_command_line_processing = Hooked_OnBeforeCommandLineProcessing;
 
+    auto cache_path = config::cache_dir();
+    logger::info_w("Browser", (std::wstring(L"Setting cache_path to: ") + cache_path.wstring()).c_str());
+
     const_cast<cef_settings_t *>(settings)->cache_path
-        = CefStr::from_path(config::cache_dir()).forward();
-    
+        = CefStr::from_path(cache_path).forward();
+
     const_cast<cef_settings_t *>(settings)->root_cache_path
-        = CefStr::from_path(config::cache_dir()).forward();
+        = CefStr::from_path(cache_path).forward();
 
     //static auto GetBrowserProcessHandler = app->get_browser_process_handler;
     //app->get_browser_process_handler = [](cef_app_t *self)
@@ -231,11 +259,16 @@ static int Hooked_CefInitialize(const struct _cef_main_args_t* args,
     //    return handler;
     //};
 
-    return CefInitialize(args, settings, app, windows_sandbox_info);
+    logger::info("Browser", "Calling original CefInitialize...");
+    int result = CefInitialize(args, settings, app, windows_sandbox_info);
+    logger::infof("Browser", "CefInitialize returned %d", result);
+    return result;
 }
 
 void HookBrowserProcess()
 {
+    logger::info("Browser", "HookBrowserProcess() started");
+
 #if OS_WIN && _DEBUG
     // Open console window.
     AllocConsole();
@@ -244,14 +277,22 @@ void HookBrowserProcess()
 #endif
 
     // Hook CefInitialize().
+    logger::info("Browser", "Hooking cef_initialize...");
     CefInitialize.hook(LIBCEF_MODULE_NAME,
         "cef_initialize", Hooked_CefInitialize);
+    logger::info("Browser", "cef_initialize hooked");
 
     // Hook CefBrowserHost::CreateBrowser().
+    logger::info("Browser", "Hooking cef_browser_host_create_browser...");
     CefBrowserHost_CreateBrowser.hook(LIBCEF_MODULE_NAME,
         "cef_browser_host_create_browser", Hooked_CefBrowserHost_CreateBrowser);
-    
+    logger::info("Browser", "cef_browser_host_create_browser hooked");
+
     // Hook CefRequestContext::CreateContext().
+    logger::info("Browser", "Hooking cef_request_context_create_context...");
     CefRequestContext_CreateContext.hook(LIBCEF_MODULE_NAME,
         "cef_request_context_create_context", Hooked_CefRequestContext_CreateContext);
+    logger::info("Browser", "cef_request_context_create_context hooked");
+
+    logger::info("Browser", "HookBrowserProcess() completed successfully");
 }

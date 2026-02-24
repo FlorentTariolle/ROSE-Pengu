@@ -83,6 +83,10 @@ private:
         CefScopedStr url{request->get_url(request)};
         CefScopedStr method{request->get_method(request)};
 
+        // "https://riotclient" is 18 characters - validate URL length first
+        if (url.length < 18)
+            return 0;
+
         std::u16string real_url;
         real_url.append(std::u16string(url_origin_.begin(), url_origin_.end()));
         real_url.append((char16_t *)url.str + 18, url.length - 18);
@@ -184,11 +188,11 @@ void browser::set_riotclient_credentials(const char *port, const char *token)
     url_origin_.assign("https://127.0.0.1:");
     url_origin_.append(port);
 
-    char buffer[128];
-    strcpy(buffer, "riot:");
-    strcat(buffer, token);
+    // Use std::string to safely concatenate without buffer overflow
+    std::string auth_string = "riot:";
+    auth_string.append(token ? token : "");
 
-    CefScopedStr base64{cef_base64encode(buffer, strlen(buffer))};
+    CefScopedStr base64{cef_base64encode(auth_string.c_str(), auth_string.length())};
     authorization_.assign("Basic ");
     authorization_.append(base64.to_utf8());
 }

@@ -36,6 +36,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\browser\browser.h" />
+    <ClInclude Include="src\logger.h" />
     <ClInclude Include="src\pengu.h" />
     <ClInclude Include="src\hook.h" />
     <ClInclude Include="src\platform.h" />

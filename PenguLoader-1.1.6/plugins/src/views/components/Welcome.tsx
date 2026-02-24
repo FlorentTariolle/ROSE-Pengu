@@ -109,13 +109,13 @@ export function Welcome() {
                       <div class="text-sm text-black">{_t("welcome_msg")}</div>
                       <div class="flex mt-5 space-x-1">
                         <a
-                          href="https://discord.com/invite/cDepnwVS8Z"
+                          href="https://discord.gg/roseapp"
                           target="_blank"
                           rel="noreferrer"
                           class="opacity-90 hover:opacity-100"
                         >
                           <img
-                            src="https://img.shields.io/discord/1426680928759189545?color=32A832&logo=discord&logoColor=white&label=Discord"
+                            src="https://img.shields.io/discord/1465467335946272780?color=32A832&logo=discord&logoColor=white&label=Discord"
                             alt=""
                           />
                         </a>

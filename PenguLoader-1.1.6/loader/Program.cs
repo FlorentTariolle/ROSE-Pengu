@@ -14,7 +14,7 @@ namespace PenguLoader
     {
         public static string Name => "Rose Loader";
         public static string HomepageUrl => "https://ko-fi.com/roseapp";
-        public static string DiscordUrl => "https://discord.gg/cDepnwVS8Z";
+        public static string DiscordUrl => "https://discord.gg/roseapp";
         public static string GithubRepo => "Alban1911/Rose";
         public static string GithubUrl => $"https://github.com/{GithubRepo}";
         public static string GithubIssuesUrl => $"https://github.com/{GithubRepo}/issues";
@@ -28,27 +28,77 @@ namespace PenguLoader
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool AttachConsole(int dwProcessId);
 
+        private static string CrashLogPath => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+
+        private static void LogFailure(string context, string details = null, Exception ex = null)
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine($"[{DateTime.Now}] {context}");
+                sb.AppendLine($"  Version:   {VERSION}");
+                sb.AppendLine($"  BaseDir:   {AppDomain.CurrentDomain.BaseDirectory}");
+                sb.AppendLine($"  OS:        {Environment.OSVersion}");
+                if (details != null)
+                    sb.AppendLine($"  Details:   {details}");
+                if (ex != null)
+                {
+                    sb.AppendLine($"  Exception: {ex.GetType().Name}: {ex.Message}");
+                    sb.AppendLine($"  Stack:     {ex.StackTrace}");
+                }
+                sb.AppendLine();
+                File.AppendAllText(CrashLogPath, sb.ToString());
+            }
+            catch { }
+        }
+
         [STAThread]
         private static int Main(string[] args)
         {
+            try
+            {
+                Logger.Initialize();
+                DesktopUser.Initialize();
+                   Logger.LogSystemInfo();
+                return MainInner(args);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Program", "Unhandled exception in Main", ex);
+                LogFailure($"Unhandled (args: {string.Join(" ", args)})", ex: ex);
+                return -99;
+            }
+        }
+
+        private static int MainInner(string[] args)
+        {
+            Logger.Info("Program", $"MainInner called with args: [{string.Join(", ", args)}]");
+
             var dataStorePath = args.FirstOrDefault(DataStore.IsDataStore);
             if (dataStorePath != null)
             {
+                Logger.Info("Program", $"DataStore path detected: {dataStorePath}");
                 DataStore.DumpDataStore(dataStorePath);
                 return 0;
             }
 
             using (var mutex = new Mutex(true, "989d2110-46da-4c8d-84c1-c4a42e43c424", out var createdNew))
             {
+                Logger.Info("Program", $"Mutex acquired, createdNew={createdNew}");
+
                 var silent = args.Any(IsSilentArgument);
                 var commandArgs = ExtractCommandArgs(args);
 
+                Logger.Info("Program", $"Silent mode: {silent}, Command args: [{string.Join(", ", commandArgs)}]");
+
                 if (commandArgs.Count == 0)
                 {
+                    Logger.Info("Program", "No command args, showing help");
                     return ShowHelp(silent);
                 }
 
                 var commandKey = commandArgs[0].ToLowerInvariant();
+                Logger.Info("Program", $"Command: {commandKey}");
 
                 switch (commandKey)
                 {
@@ -100,44 +150,76 @@ namespace PenguLoader
 
         private static int RunApplication(bool createdNew)
         {
+            Logger.Info("Program", $"RunApplication called, createdNew={createdNew}");
+
             if (!createdNew)
             {
+                Logger.Info("Program", "Another instance is running, focusing previous instance");
                 Native.SetFocusToPreviousInstance();
                 return 0;
             }
 
             if (!Environment.Is64BitOperatingSystem)
             {
+                Logger.Warn("Program", "32-bit OS detected, showing deprecation warning");
                 MessageBox.Show("32-BIT CLIENT DEPRECATION\n\nStarting with LoL patch 13.8, 32-bit Windows is no longer supported. Please upgrade your Windows to 64-bit.",
                     Name, MessageBoxButton.OK, MessageBoxImage.Warning);
                 return 1;
             }
 
+            Logger.Info("Program", "Starting WPF application");
             App.Main();
+            Logger.Info("Program", "WPF application closed");
             return 0;
         }
 
         private static int HandleInstall(bool createdNew, bool active, bool silent)
         {
             var action = active ? "activate" : "deactivate";
+            Logger.Info("Program", $"HandleInstall called: action={action}, createdNew={createdNew}, silent={silent}");
 
             if (!Module.IsFound)
             {
+                Logger.Error("Program", "Module (core.dll) not found");
                 return NotifyResult($"Unable to {action} Pengu because `core.dll` was not found next to the loader.", silent, MessageBoxImage.Error, -2);
             }
 
             if (!createdNew || Module.IsLoaded)
             {
+                Logger.Warn("Program", $"Cannot {action}: createdNew={createdNew}, IsLoaded={Module.IsLoaded}");
                 return NotifyResult($"Please close the running League Client and Loader menu before you {action} it.",
                     silent, MessageBoxImage.Warning, -1);
             }
 
-            if (!Module.SetActive(active))
+            if (!LCU.IsValidDir(Config.LeaguePath))
             {
-                return NotifyResult($"Failed to {action} Pengu. Make sure League is closed and try again.",
+                Logger.Error("Program", $"League path invalid: {Config.LeaguePath}");
+                return NotifyResult($"Unable to {action} Pengu: League path is not set or invalid. Use --set-league-path to configure it.",
+                    silent, MessageBoxImage.Error, -5);
+            }
+
+            try
+            {
+                Logger.Info("Program", $"Calling Module.SetActive({active})");
+                if (!Module.SetActive(active))
+                {
+                    Logger.Error("Program", $"SetActive returned false! IsActivated={Module.IsActivated}, IsLoaded={Module.IsLoaded}");
+                    LogFailure($"HandleInstall SetActive returned false ({action})",
+                        $"IsActivated={Module.IsActivated}, IsLoaded={Module.IsLoaded}");
+                    return NotifyResult($"Failed to {action} Pengu. Make sure League is closed and try again.",
+                        silent, MessageBoxImage.Error, -3);
+                }
+                Logger.Info("Program", "SetActive succeeded");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Program", $"Exception in HandleInstall ({action})", ex);
+                LogFailure($"HandleInstall ({action})", ex: ex);
+                return NotifyResult($"Failed to {action} Pengu: {ex.Message}",
                     silent, MessageBoxImage.Error, -3);
             }
 
+            Logger.Info("Program", $"HandleInstall completed successfully: {action}");
             NotifyResult($"Pengu has been {(active ? "activated" : "deactivated")}.", silent, MessageBoxImage.Information);
             return 0;
         }
@@ -158,19 +240,44 @@ namespace PenguLoader
         private static int HandleForceInstall(bool active, bool silent)
         {
             var action = active ? "activate" : "deactivate";
+            Logger.Info("Program", $"HandleForceInstall called: action={action}, silent={silent}");
 
             if (!Module.IsFound)
             {
+                Logger.Error("Program", "Module (core.dll) not found");
                 return NotifyResult($"Unable to {action} Pengu because `core.dll` was not found next to the loader.",
                     silent, MessageBoxImage.Error, -2);
             }
 
-            if (!Module.SetActive(active))
+            if (!LCU.IsValidDir(Config.LeaguePath))
             {
-                return NotifyResult($"Failed to {action} Pengu. Make sure League is closed and try again.",
+                Logger.Error("Program", $"League path invalid: {Config.LeaguePath}");
+                return NotifyResult($"Unable to {action} Pengu: League path is not set or invalid. Use --set-league-path to configure it.",
+                    silent, MessageBoxImage.Error, -5);
+            }
+
+            try
+            {
+                Logger.Info("Program", $"Calling Module.SetActive({active}) [FORCE]");
+                if (!Module.SetActive(active))
+                {
+                    Logger.Error("Program", $"SetActive returned false! IsActivated={Module.IsActivated}, IsLoaded={Module.IsLoaded}");
+                    LogFailure($"HandleForceInstall SetActive returned false ({action})",
+                        $"IsActivated={Module.IsActivated}, IsLoaded={Module.IsLoaded}");
+                    return NotifyResult($"Failed to {action} Pengu. Make sure League is closed and try again.",
+                        silent, MessageBoxImage.Error, -3);
+                }
+                Logger.Info("Program", "SetActive succeeded");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Program", $"Exception in HandleForceInstall ({action})", ex);
+                LogFailure($"HandleForceInstall ({action})", ex: ex);
+                return NotifyResult($"Failed to {action} Pengu: {ex.Message}",
                     silent, MessageBoxImage.Error, -3);
             }
 
+            Logger.Info("Program", $"HandleForceInstall completed successfully: {action}");
             NotifyResult($"Pengu has been {(active ? "activated" : "deactivated")}.", silent, MessageBoxImage.Information);
             return 0;
         }
@@ -195,7 +302,7 @@ namespace PenguLoader
                 .AppendLine("  --set-league-path <path>       Set the League of Legends installation path")
                 .AppendLine("  --get-league-path              Show the configured League of Legends path")
                 .AppendLine("  --set-option <key> <value>     Update loader options")
-                .AppendLine("                                  keys: use-symlink, optimize-client, super-low-spec, language")
+                .AppendLine("                                  keys: optimize-client, super-low-spec, language")
                 .AppendLine("  --restart-client               Ask the League Client UX to restart")
                 .AppendLine("  --force-activate               Force Pengu activation even if the client is running")
                 .AppendLine("  --force-deactivate             Force Pengu deactivation even if the client is running")
@@ -432,13 +539,6 @@ namespace PenguLoader
 
             switch (key)
             {
-                case "use-symlink":
-                    if (!TryParseBool(value, out var symlinkValue))
-                        return NotifyResult("Value for use-symlink must be true/false.", silent, MessageBoxImage.Warning, -16);
-
-                    Config.UseSymlink = symlinkValue;
-                    return NotifyResult($"use-symlink set to {Config.UseSymlink}.", silent, MessageBoxImage.Information);
-
                 case "optimize-client":
                     if (!TryParseBool(value, out var optimizeValue))
                         return NotifyResult("Value for optimize-client must be true/false.", silent, MessageBoxImage.Warning, -16);
