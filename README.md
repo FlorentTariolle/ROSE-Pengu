@@ -1,2 +1,1 @@
-# Rose-Pengu
-Rose's [Pengu Loader](https://github.com/PenguLoader/PenguLoader) fork, runs silently in the background the desired mods.
+### ⚠️ DEPRECATED: This project has been merged into [Rose](https://github.com/Alban1911/Rose). Please view the active source code there.
