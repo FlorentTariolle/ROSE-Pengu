@@ -14,7 +14,7 @@ namespace PenguLoader
     {
         public static string Name => "Rose Loader";
         public static string HomepageUrl => "https://ko-fi.com/roseapp";
-        public static string DiscordUrl => "https://discord.gg/roseapp";
+        public static string DiscordUrl => "https://discord.gg/roseskins";
         public static string GithubRepo => "Alban1911/Rose";
         public static string GithubUrl => $"https://github.com/{GithubRepo}";
         public static string GithubIssuesUrl => $"https://github.com/{GithubRepo}/issues";

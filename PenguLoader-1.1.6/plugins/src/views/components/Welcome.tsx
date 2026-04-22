@@ -109,7 +109,7 @@ export function Welcome() {
                       <div class="text-sm text-black">{_t("welcome_msg")}</div>
                       <div class="flex mt-5 space-x-1">
                         <a
-                          href="https://discord.gg/roseapp"
+                          href="https://discord.gg/roseskins"
                           target="_blank"
                           rel="noreferrer"
                           class="opacity-90 hover:opacity-100"

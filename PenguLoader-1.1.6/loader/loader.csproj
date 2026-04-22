@@ -43,7 +43,6 @@
   <ItemGroup>
     <Resource Include="Resources\icon.ico" />
     <Resource Include="Resources\*.png" />
-    <Resource Include="FodyWeavers.xml" />
   </ItemGroup>
 
   <ItemGroup>
